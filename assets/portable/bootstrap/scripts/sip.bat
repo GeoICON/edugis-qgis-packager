@@ -1,0 +1,1 @@
+textreplace -std -t "%OSGEO4W_ROOT%\apps\Python27\Lib\site-packages\sipconfig.py"

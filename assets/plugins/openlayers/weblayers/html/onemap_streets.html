@@ -1,0 +1,233 @@
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>OpenLayers OneMap Layer</title>
+    <link rel="stylesheet" href="qgis.css" type="text/css">
+    <script src="OpenLayers.js"></script>
+    <script src="OlOverviewMarker.js"></script>
+
+    <!--<script src="BCA_Buildings.js"></script>-->
+
+    <style>
+      .olTileImage {
+        /*border: 1px solid black;*/
+
+      }
+    </style>
+
+    <script type="text/javascript">
+
+        var gridHeight = 10214462.554884;
+        var gridWidth = 5974382.01039352;
+
+        var gridTop = 10172511.8974330;
+        var gridBottom = gridTop - 10214462.554884;
+
+        var g_originX = -5878011.89743302;
+        var g_originY = gridTop;
+
+        //g_originY += 100;
+
+        var yOffset = 22.0;
+
+        //OpenLayers.DOTS_PER_INCH = 90.71428571428572;
+        OpenLayers.DOTS_PER_INCH = 96;
+    
+        var map;
+        var loadEnd = false;
+
+        function init() {
+
+            map = new OpenLayers.Map('map', {
+              theme: null,
+              controls: [],
+              projection: new OpenLayers.Projection("EPSG:3414"),
+              units: "m",
+              allOverlays: true,
+              //maxExtent: new OpenLayers.Bounds(-5878011.89743302, -41950.6574510171, 96370.1129604966, 10172511.897433),
+              maxExtent: new OpenLayers.Bounds(g_originX, gridBottom, 96370.1129604966, g_originY),
+              resolutions: [
+                76.43721954110570,
+                38.21860977055290,
+                19.10930488527640,
+                9.554652442638220,
+                4.777326221319110,
+                2.388663110659550,
+                1.194331555329780,
+                0.597165777664889,
+                0.298450596901194 
+              ],
+              adjustZoom: function(zoom) { return zoom; }
+            });
+
+            // map.addControl(new OpenLayers.Control.PanZoomBar());
+            // map.addControl(new OpenLayers.Control.LayerSwitcher({'ascending':false}));
+            // map.addControl(new OpenLayers.Control.MousePosition());
+            // map.addControl(new OpenLayers.Control.KeyboardDefaults());
+            // map.addControl(new OpenLayers.Control.Navigation());
+
+            loadEnd = false;
+
+            function layerLoadStart(event) {
+              //console.log("::layerLoadStart()");
+              loadEnd = false;
+            }
+
+            function layerLoadEnd(event) {
+              //console.log("::layerLoadEnd()");
+              loadEnd = true;
+            }
+
+            String.prototype.lpad = function(padString, length) {
+              var str = this;
+              while (str.length < length) {
+                str = padString + str;
+              }
+              return str;
+            }
+
+            
+            var getTileURL = (function(){
+              // var originX = -5878011.89743302;
+              // var originY = 10172511.8974330;
+              
+              var originX = g_originX;
+              var originY = g_originY;
+
+              mapMinLevel = 0;
+              mapMaxLevel = 8;
+
+              //var mapBounds = new OpenLayers.Bounds(-4589.0529981345, 13867.0542885269, 96370.1129604966, 56958.711739544)
+              var mapBounds = new OpenLayers.Bounds(0.0, 10000.0, 65000.0, 55000.0)
+              
+              return function(bounds) {
+                var me = this;
+                var level = me.map.getZoom();
+
+                if (!(mapBounds.intersectsBounds(bounds) && level >= mapMinLevel && level <= mapMaxLevel)) {
+                  return "s.gif";
+                }
+
+                var res = me.map.getResolution();
+                var col = Math.round((bounds.left - originX) / (res * me.tileSize.w));
+                var row = Math.round((originY - bounds.top) / (res * me.tileSize.h));
+                var colStr = col.toString(16);
+                var rowStr = row.toString(16);
+                var levelStr = "" + level;
+
+                // var foo, bar;
+                // foo = (originY - bounds.top) / (res * me.tileSize.h);
+                // bar = Math.round(foo);
+                // var rowError = bar - foo;
+                // foo = (bounds.left - originX) / (res * me.tileSize.w);
+                // bar = Math.round(foo);
+                // var colError = bar - foo;
+                // console.log("Error: ", rowError, colError);
+
+                //console.log("bounds", bounds.left, bounds.bottom, bounds.right, bounds.top, " ---> ", row, col);
+
+                var url = "http://e1.onemap.sg/Basemap/Layers/_alllayers/" +
+                  "L" + levelStr.lpad("0", 2) + "/" +
+                  "R" + rowStr.lpad("0", 8) + "/" +
+                  "C" + colStr.lpad("0", 8) + "." +
+                  "jpg";                
+
+                return url;
+              };
+            })();
+                       
+            // Dirty trick to solve the problem of misalignment on zoom levels 6-8
+            
+            // This layer works normally on levels 0-7           
+            var onemapLayer = new OpenLayers.Layer.TMS(
+              "OneMap Layer",
+              [],
+              {
+                getURL: function(bounds) {
+                  if (this.map.getZoom() > 7) return "s.gif";
+                  console.log("onemapLayer ZOOM", this.map.getZoom());
+                  return getTileURL.apply(this, [bounds]);
+                },
+                // +4 - to correct small misalignment caused by unknown reasons
+                tileOrigin: new OpenLayers.LonLat(g_originX, gridBottom + 4),
+                eventListeners: {
+                  // "loadstart": function() {
+                  //    if (this.map.getZoom() > 7) {
+                  //      return layerLoadStart.call(this);    
+                  //    }
+                  // },
+                  "loadstart": layerLoadStart,
+                  "loadend": function() {
+                     if (this.map.getZoom() < 8) {
+                        loadEnd = true;
+                       //return layerLoadEnd.call(this);    
+                     }
+                  },
+                }                
+              }
+            );
+
+
+            // This layers works normally only for level 8. There is very big misalignment on Y axis (22 meters).
+            var onemapLayer_8 = new OpenLayers.Layer.TMS(
+              "OneMap Layer",
+              [],
+              {
+                getURL: function(bounds) {
+                  if (this.map.getZoom() < 8) return "s.gif";
+                  console.log("onemapLayer_8 ZOOM", this.map.getZoom());
+                  return getTileURL.apply(this, [bounds]);
+                },
+                // +22 - correct misalignment
+                tileOrigin: new OpenLayers.LonLat(g_originX, gridBottom + 22),
+                visibility: true,
+                eventListeners: {
+                  // "loadstart": function() {
+                  //    if (this.map.getZoom() < 8) {
+                  //      return layerLoadStart.call(this);    
+                  //    }
+                  // },
+                  "loadstart": layerLoadStart,
+                  "loadend": function() {
+                     if (this.map.getZoom() > 7) {
+                       //return layerLoadEnd.call(this);    
+                       loadEnd = true;
+                     }
+                  }
+                }                
+              }
+            );
+
+            map.addLayers([onemapLayer_8, onemapLayer]);
+
+
+            //map.addControl(new OpenLayers.Control.Attribution());            
+            //map.addControl(new OpenLayers.Control.MousePosition());
+
+            map.setCenter(new OpenLayers.LonLat(17047.3, 35541), 8);
+
+
+           //  // -------------------------
+           // var geojson_format = new OpenLayers.Format.GeoJSON();
+           // var vector_layer = new OpenLayers.Layer.Vector(); 
+           // map.addLayer(vector_layer);
+           // vector_layer.addFeatures(geojson_format.read(bcaBuildings));
+           //  // -------------------------
+
+
+
+
+
+
+
+
+
+
+        }
+
+
+    </script>
+  </head>
+  <body onload="init()">
+    <div id="map"></div>
+  </body>
+</html>
